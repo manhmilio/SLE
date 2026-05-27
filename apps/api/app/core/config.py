@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://sle_user:sle_password@localhost:5432/sle_db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:1111@localhost:5432/sle_db"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
