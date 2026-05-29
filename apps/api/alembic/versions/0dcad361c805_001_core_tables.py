@@ -7,7 +7,8 @@ Create Date: (giữ nguyên)
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID, INET
-revision = "..."   # giữ nguyên id file của bạn
+
+revision = "0dcad361c805" #id file migration
 down_revision = None
 branch_labels = None
 depends_on = None
