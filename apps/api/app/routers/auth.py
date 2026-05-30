@@ -4,11 +4,12 @@ Task 2.1 — Auth core
 """
 from fastapi import APIRouter, HTTPException, Request, status
 
-from app.dependencies import DB
+from app.dependencies import DB, CurrentUser
 from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
-    LoginResponse,
+    RefreshRequest, 
+    RefreshResponse,
     RegisterRequest,
     RegisterResponse,
     UserPublic, 
@@ -116,3 +117,43 @@ async def login(
         tokens=tokens,
     )
     return {"success": True, "data": response.model_dump()}
+
+# POST /auth/refresh
+@router.post("/refresh", summary="Xoay refresh token")
+async def refresh(body: RefreshRequest, db: DB) -> dict:
+    try:
+        tokens = await auth_service.refresh_tokens(db, body.refresh_token)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "success": False,
+                "error": {"code": "INVALID_REFRESH_TOKEN", "message": str(exc)},
+            },
+        )
+    return {"success": True, "data": RefreshResponse(tokens=tokens).model_dump()}
+
+# POST /auth/logout
+@router.post("/logout", summary="Đăng xuất thiết bị hiện tại")
+async def logout(
+    body: RefreshRequest,
+    current_user: CurrentUser,
+    db: DB,
+) -> dict:
+    try:
+        await auth_service.logout(db, body.refresh_token)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "success": False,
+                "error": {"code": "INVALID_REFRESH_TOKEN", "message": str(exc)},
+            },
+        )
+    return {"success": True, "data": {"message": "Logged out successfully"}}
+
+# POST /auth/logout-all
+@router.post("/logout-all", summary="Đăng xuất toàn bộ thiết bị")
+async def logout_all(current_user: CurrentUser, db: DB) -> dict:
+    await auth_service.logout_all(db, str(current_user.id))
+    return {"success": True, "data": {"message": "Logged out from all devices"}}

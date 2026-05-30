@@ -3,7 +3,7 @@ services/auth_service.py — Business logic cho authentication
 """
 from datetime import timedelta, timezone, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -132,3 +132,70 @@ async def _issue_tokens(
     db.add(db_token)
 
     return _build_token_data(raw_access, raw_refresh)
+
+# refresh tokens
+async def refresh_tokens(
+    db: AsyncSession,
+    raw_token: str,
+) -> TokenData:
+    hashed = hash_refresh_token(raw_token)
+    
+    # Tìm token trong DB
+    result = await db.execute(
+        select(RefreshToken).where(RefreshToken.token == hashed)
+    )
+    db_token = result.scalar_one_or_none()
+
+    # Validate
+    if not db_token:
+        raise ValueError("Invalid refresh token")
+    if db_token.is_revoked:
+        raise ValueError("Refresh token has been revoked")
+    if db_token.expires_at < datetime.now(timezone.utc):
+        raise ValueError("Refresh token has expired")
+
+    # Lấy user
+    user = await get_user_by_id(db, str(db_token.user_id))
+    if not user or not user.is_active:
+        raise ValueError("User not found or disabled")
+
+    # Revoke token cũ
+    db_token.is_revoked = True
+
+    # Issue cặp token mới
+    tokens = await _issue_tokens(db, user, ip=None, device=None)
+    await db.commit()
+    return tokens
+
+# Logout 
+async def logout(
+    db: AsyncSession,
+    raw_token: str,
+) -> None:
+    hashed = hash_refresh_token(raw_token)
+
+    result = await db.execute(
+        select(RefreshToken).where(RefreshToken.token == hashed)
+    )
+    db_token = result.scalar_one_or_none()
+
+    if not db_token:
+        raise ValueError("Invalid refresh token")
+
+    db_token.is_revoked = True
+    await db.commit()
+
+# Logout all
+async def logout_all(
+    db: AsyncSession,
+    user_id: str,
+) -> None:
+    await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.is_revoked == False,
+        )
+        .values(is_revoked=True)
+    )
+    await db.commit()
