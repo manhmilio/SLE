@@ -30,10 +30,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # MinIO
-    MINIO_ENDPOINT: str = "localhost:9000"
-    MINIO_ROOT_USER: str        
-    MINIO_ROOT_PASSWORD: str    
-    MINIO_BUCKET: str = "sle-uploads"
-    MINIO_SECURE: bool = False
+    MINIO_ENDPOINT: str  
+    MINIO_ROOT_USER: str
+    MINIO_ROOT_PASSWORD: str
+    MINIO_BUCKET_AVATARS: str = "avatars"
+    MINIO_USE_SSL: bool = False
 
 settings = Settings()  # pyright: ignore[reportCallIssue]

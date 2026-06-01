@@ -25,3 +25,8 @@ class UpdateProfileRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class AvatarUploadResponse(BaseModel):
+    avatar_url: str
+    message: str = "Avatar updated successfully"

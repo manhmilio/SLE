@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, UploadFile, File
 
 from app.dependencies import CurrentUser, DB
-from app.schemas.user import UserProfile, UpdateProfileRequest, ChangePasswordRequest
-from app.services import user_service
+from app.schemas.user import UserProfile, UpdateProfileRequest, ChangePasswordRequest, AvatarUploadResponse
+from app.services import user_service, minio_service
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -44,3 +44,30 @@ async def change_my_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         )
+    
+@router.post("/me/avatar", response_model=AvatarUploadResponse)
+async def upload_avatar(
+    current_user: CurrentUser,
+    db: DB,
+    file: UploadFile = File(...),
+):
+    # Đọc file content
+    file_data = await file.read()
+
+    # Upload lên MinIO (validate bên trong service)
+    try:
+        avatar_url = minio_service.upload_avatar(
+            file_data=file_data,
+            content_type=file.content_type or "",
+            user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    # Cập nhật DB
+    await user_service.update_avatar_url(db, current_user, avatar_url)
+
+    return AvatarUploadResponse(avatar_url=avatar_url)
