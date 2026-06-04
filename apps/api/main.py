@@ -1,19 +1,15 @@
 from contextlib import asynccontextmanager
- 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, users
-from app.routers import folders
- 
+from app.routers import auth, users, folders, sets
 from app.core.config import settings
-from app.routers import auth   
- 
- 
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
- 
- 
+
+
 app = FastAPI(
     title="SLE API",
     version="1.0.0",
@@ -21,7 +17,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
- 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -29,16 +25,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
- 
-# Routers
-app.include_router(auth.router, prefix="/api/v1")   # ← THÊM
- 
- 
+
+app.include_router(auth.router,    prefix="/api/v1")
+app.include_router(users.router,   prefix="/api/v1")
+app.include_router(folders.router, prefix="/api/v1")
+app.include_router(sets.router,    prefix="/api/v1")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "environment": settings.ENVIRONMENT}
-
-
-app.include_router(auth.router,  prefix="/api/v1")
-app.include_router(users.router, prefix="/api/v1") 
-app.include_router(folders.router, prefix="/api/v1")
