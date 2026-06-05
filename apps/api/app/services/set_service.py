@@ -2,6 +2,8 @@ from uuid import UUID
 from typing import Sequence, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from app.models.content import StudySet, Folder, Card
+from app.models.learning import SetClone
 
 from app.models.content import StudySet, Folder
 from app.schemas.study_set import StudySetCreate, StudySetUpdate
@@ -97,3 +99,59 @@ class SetService:
     async def delete(db: AsyncSession, study_set: StudySet) -> None:
         await db.delete(study_set)
         await db.commit()
+
+    @staticmethod
+    async def clone(
+        db: AsyncSession,
+        set_id: UUID,
+        user_id: UUID,
+    ) -> StudySet:
+        # 1. Lấy set gốc — public hoặc của chính mình
+        original = await SetService.get_by_id(db, set_id, user_id)
+        if not original:
+            raise ValueError("Study set not found")
+
+        # 2. Tạo set mới — copy toàn bộ fields, đổi owner + gắn cloned_from
+        new_set = StudySet(
+            owner_id=user_id,
+            title=original.title,
+            description=original.description,
+            tags=original.tags,
+            is_public=False,          # clone mặc định là private
+            folder_id=None,           # không kế thừa folder của người khác
+            cloned_from=original.id,
+        )
+        db.add(new_set)
+        await db.flush()   # flush để new_set.id có giá trị, chưa commit
+
+        # 3. Copy toàn bộ cards từ set gốc
+        cards_result = await db.execute(
+            select(Card)
+            .where(Card.study_set_id == original.id)
+            .order_by(Card.order.asc())
+        )
+        original_cards = cards_result.scalars().all()
+
+        for card in original_cards:
+            new_card = Card(
+                study_set_id=new_set.id,
+                owner_id=user_id,
+                front=card.front,
+                back=card.back,
+                image_url=card.image_url,
+                order=card.order,
+            )
+            db.add(new_card)
+
+        # 4. Ghi analytics vào set_clones
+        clone_record = SetClone(
+            original_set_id=original.id,
+            original_owner_id=original.owner_id,
+            cloned_set_id=new_set.id,
+            cloned_by=user_id,
+        )
+        db.add(clone_record)
+
+        await db.commit()
+        await db.refresh(new_set)
+        return new_set

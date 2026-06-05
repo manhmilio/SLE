@@ -60,3 +60,10 @@ async def delete_set(set_id: UUID, current_user: CurrentUser, db: DB):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
     await SetService.delete(db, study_set)
+
+@router.post("/{set_id}/clone", response_model=StudySetResponse, status_code=status.HTTP_201_CREATED)
+async def clone_set(set_id: UUID, current_user: CurrentUser, db: DB):
+    try:
+        return await SetService.clone(db, set_id, current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
