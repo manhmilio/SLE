@@ -86,3 +86,38 @@ def upload_avatar(file_data: bytes, content_type: str, user_id: uuid.UUID) -> st
     endpoint = settings.MINIO_ENDPOINT
     scheme = "https" if settings.MINIO_USE_SSL else "http"
     return f"{scheme}://{endpoint}/{bucket}/{object_name}"
+
+def upload_card_image(file_data: bytes, content_type: str, card_id: str) -> str:
+    """
+    Upload ảnh card lên MinIO.
+    Trả về public URL.
+    """
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if content_type not in allowed_types:
+        raise ValueError(f"Loại file không hợp lệ. Chỉ chấp nhận: {', '.join(allowed_types)}")
+
+    max_size = 5 * 1024 * 1024  # 5MB
+    if len(file_data) > max_size:
+        raise ValueError("File quá lớn. Tối đa 5MB")
+
+    ext_map = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+    ext = ext_map[content_type]
+    object_name = f"{card_id}/image.{ext}"
+    bucket = settings.MINIO_BUCKET_CARDS
+
+    ensure_bucket_exists(bucket)
+
+    client = get_minio_client()
+    client.put_object(
+        bucket_name=bucket,
+        object_name=object_name,
+        data=io.BytesIO(file_data),
+        length=len(file_data),
+        content_type=content_type,
+    )
+
+    return f"http://{settings.MINIO_ENDPOINT}/{bucket}/{object_name}"

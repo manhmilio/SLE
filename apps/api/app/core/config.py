@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     MINIO_ROOT_USER: str
     MINIO_ROOT_PASSWORD: str
     MINIO_BUCKET_AVATARS: str = "avatars"
+    MINIO_BUCKET_CARDS: str = "card-images"
     MINIO_USE_SSL: bool = False
 
 settings = Settings()  # pyright: ignore[reportCallIssue]
