@@ -158,3 +158,70 @@ class CardService:
         await db.delete(card)
         await db.commit()
         return True
+    
+    async def reorder_card(
+        self,
+        db: AsyncSession,
+        set_id: UUID,
+        card_id: UUID,
+        user_id: UUID,
+        prev_order: Optional[float],
+        next_order: Optional[float],
+    ) -> Optional[Card]:
+        """
+        Đặt lại vị trí card bằng FLOAT order.
+        - prev_order: order của card phía trên (None nếu lên đầu)
+        - next_order: order của card phía dưới (None nếu xuống cuối)
+        """
+        study_set = await self._get_set_if_owner(db, set_id, user_id)
+        if not study_set:
+            return None
+
+        result = await db.execute(
+            select(Card).where(Card.id == card_id, Card.study_set_id == set_id)
+        )
+        card = result.scalar_one_or_none()
+        if not card:
+            return None
+
+        # Tính order mới
+        if prev_order is None and next_order is None:
+            new_order = 1.0
+        elif prev_order is None:
+            assert next_order is not None
+            new_order = next_order - 1.0
+        elif next_order is None:
+            new_order = prev_order + 1.0
+        else:
+            new_order = (prev_order + next_order) / 2.0
+            
+        card.order = new_order
+        await db.flush()
+
+        # Kiểm tra nếu cần rebalance
+        needs_rebalance = False
+        if prev_order is not None and abs(new_order - prev_order) < 1e-9:
+            needs_rebalance = True
+        if next_order is not None and abs(next_order - new_order) < 1e-9:
+            needs_rebalance = True
+
+        if needs_rebalance:
+            await self._rebalance(db, set_id)
+            # Refresh lại card sau rebalance
+            await db.refresh(card)
+
+        await db.commit()
+        await db.refresh(card)
+        return card
+
+    async def _rebalance(self, db: AsyncSession, set_id: UUID) -> None:
+        """Reset toàn bộ order về 1.0, 2.0, 3.0, ... theo thứ tự hiện tại."""
+        result = await db.execute(
+            select(Card)
+            .where(Card.study_set_id == set_id)
+            .order_by(Card.order)
+        )
+        cards = result.scalars().all()
+        for i, c in enumerate(cards, start=1):
+            c.order = float(i)
+        await db.flush()

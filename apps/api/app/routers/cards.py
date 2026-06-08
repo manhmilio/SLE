@@ -2,7 +2,7 @@ from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
-from app.schemas.card import CardCreate, CardUpdate, CardResponse
+from app.schemas.card import CardCreate, CardUpdate, CardResponse, CardReorderRequest
 from app.services.card_service import CardService
 from app.dependencies import CurrentUser, DB
 
@@ -79,3 +79,20 @@ async def delete_card(
     deleted = await service.delete_card(db, set_id, card_id, current_user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Card not found or access denied")
+
+    
+@router.patch("/{set_id}/cards/{card_id}/order", response_model=CardResponse)
+async def reorder_card(
+    set_id: UUID,
+    card_id: UUID,
+    data: CardReorderRequest,
+    current_user: CurrentUser,
+    db: DB,
+):
+    card = await service.reorder_card(
+        db, set_id, card_id, current_user.id,
+        data.prev_order, data.next_order,
+    )
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found or access denied")
+    return card
