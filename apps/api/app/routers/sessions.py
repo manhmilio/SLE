@@ -5,7 +5,7 @@ from sqlalchemy import and_, select
 
 from uuid import UUID
 from app.dependencies import CurrentUser, DB
-from app.models import Card, SessionAnswer, StudyProgress, StudySession, StudySet
+from app.models import Card, SessionAnswer, StudyProgress, StudySession, StudySet, User
 from app.schemas.session import (
     AnswerResponse,
     AnswerSubmit,
@@ -20,6 +20,7 @@ from app.schemas.session import (
     StudyMode,
 )
 from app.services.sm2_service import KNOWN_THRESHOLD_DAYS, SM2Input, calculate_sm2, map_quality
+from app.services.streak_service import update_streak
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -218,4 +219,55 @@ async def submit_answer(
             next_review=result.next_review,
             status=CardStatus(result.status),
         ),
+    )
+
+
+# ── POST /sessions/:id/end ─────────────────────────────────────────────────────
+@router.post("/{session_id}/end", response_model=SessionEndResponse)
+async def end_session(
+    session_id: UUID,
+    current_user: CurrentUser,
+    db: DB,
+):
+    # 1. Kiểm tra session tồn tại và thuộc user
+    session = await db.get(StudySession, session_id)
+    if not session or session.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # 2. Kiểm tra session chưa kết thúc
+    if session.ended_at is not None:
+        raise HTTPException(status_code=400, detail="Session already ended")
+
+    # 3. Kết thúc session
+    now = datetime.now(timezone.utc)
+    session.ended_at = now
+
+    # 4. Tính accuracy
+    total = session.cards_studied
+    accuracy = round(session.correct / total * 100, 1) if total > 0 else 0.0
+
+    # 5. Cập nhật streak
+    user = await db.get(User, current_user.id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    await update_streak(user, db)
+
+    await db.commit()
+
+# 6. Tính duration
+    ended_at = session.ended_at
+    assert ended_at is not None
+    duration_seconds = int((ended_at - session.created_at).total_seconds())
+
+    return SessionEndResponse(
+        id=session.id,
+        set_id=session.study_set_id,
+        mode=StudyMode(session.mode),
+        started_at=session.created_at,
+        ended_at=ended_at,
+        duration_seconds=duration_seconds,
+        cards_studied=session.cards_studied,
+        correct=session.correct,
+        incorrect=session.incorrect,
+        accuracy=accuracy,
     )
