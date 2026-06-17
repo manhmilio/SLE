@@ -1,8 +1,7 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
-from sqlalchemy import and_, select
-
+from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import and_, func, select
 from uuid import UUID
 from app.dependencies import CurrentUser, DB
 from app.models import Card, SessionAnswer, StudyProgress, StudySession, StudySet, User
@@ -270,4 +269,69 @@ async def end_session(
         correct=session.correct,
         incorrect=session.incorrect,
         accuracy=accuracy,
+    )
+
+
+# ── GET /sessions ──────────────────────────────────────────────────────────────
+@router.get("", response_model=SessionListResponse)
+async def list_sessions(
+    current_user: CurrentUser,
+    db: DB,
+    set_id: UUID | None = Query(default=None),
+    mode: StudyMode | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
+):
+    # Base conditions: chỉ lấy sessions đã kết thúc của user
+    conditions = [
+        StudySession.user_id == current_user.id,
+        StudySession.ended_at.is_not(None),
+    ]
+
+    if set_id is not None:
+        conditions.append(StudySession.study_set_id == set_id)
+    if mode is not None:
+        conditions.append(StudySession.mode == mode.value)
+
+    # Count total
+    count_stmt = select(func.count()).select_from(StudySession).where(and_(*conditions))
+    total = (await db.execute(count_stmt)).scalar_one()
+
+    # Fetch sessions + set title
+    stmt = (
+        select(StudySession, StudySet.title)
+        .join(StudySet, StudySet.id == StudySession.study_set_id)
+        .where(and_(*conditions))
+        .order_by(StudySession.ended_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
+    rows = (await db.execute(stmt)).all()
+
+    items = []
+    for session, set_title in rows:
+        ended_at = session.ended_at
+        assert ended_at is not None
+        total_answered = session.cards_studied
+        accuracy = round(session.correct / total_answered * 100, 1) if total_answered > 0 else 0.0
+        items.append(
+            SessionListItem(
+                id=session.id,
+                set_id=session.study_set_id,
+                set_title=set_title,
+                mode=StudyMode(session.mode),
+                started_at=session.created_at,
+                ended_at=ended_at,
+                cards_studied=session.cards_studied,
+                correct=session.correct,
+                incorrect=session.incorrect,
+                accuracy=accuracy,
+            )
+        )
+
+    return SessionListResponse(
+        items=items,
+        total=total,
+        page=page,
+        limit=limit,
     )
