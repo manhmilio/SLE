@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, users, folders, sets, cards, sessions
+from app.routers import auth, users, folders, sets, cards, sessions, stats
 from app.core.config import settings
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ app.include_router(folders.router, prefix="/api/v1")
 app.include_router(sets.router,    prefix="/api/v1")
 app.include_router(cards.router, prefix="/api/v1")
 app.include_router(sessions.router, prefix="/api/v1")
+app.include_router(stats.router, prefix="/api/v1")
 
 @app.get("/health")
 async def health():
