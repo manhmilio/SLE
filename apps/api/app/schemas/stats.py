@@ -28,3 +28,27 @@ class SessionHistoryResponse(BaseModel):
     range: str
     group_by: str
     data: list[SessionHistoryItem]
+
+
+class ProgressSummary(BaseModel):
+    known: int
+    learning: int
+    not_started: int
+    known_rate: float           # % so với tổng cards trong set
+
+
+class ModeStats(BaseModel):
+    mode: str
+    sessions: int
+    avg_accuracy: float
+    last_studied: Optional[datetime]
+
+
+class SetStatsResponse(BaseModel):
+    set_id: str
+    set_title: str
+    card_count: int
+    progress_summary: ProgressSummary
+    by_mode: list[ModeStats]
+    total_sessions: int
+    total_study_time_seconds: int

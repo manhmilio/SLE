@@ -1,16 +1,20 @@
 from __future__ import annotations
 import uuid
-from datetime import datetime, date, timedelta, timezone   # thêm datetime
+from datetime import datetime, date, timedelta, timezone 
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, distinct, case
 
 from app.models.user import User
 from app.models.learning import StudyProgress, StudySession
-from app.schemas.stats import (                            # chuyển lên top
+from app.models.content import StudySet, Card
+from app.schemas.stats import (
     StatsOverviewResponse,
     SessionHistoryItem,
     SessionHistoryResponse,
+    ProgressSummary,
+    ModeStats,
+    SetStatsResponse,
 )
 
 KNOWN_THRESHOLD_DAYS = 7
@@ -177,3 +181,132 @@ async def get_sessions_history(
             current += timedelta(days=1)
 
     return SessionHistoryResponse(range=time_range, group_by=group_by, data=data)
+
+
+async def get_set_stats(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    set_id: uuid.UUID,
+) -> SetStatsResponse:
+    # 1. Kiểm tra set tồn tại + phân quyền
+    set_result = await db.execute(
+        select(StudySet.id, StudySet.owner_id, StudySet.title,
+               StudySet.card_count, StudySet.is_public)
+        .where(StudySet.id == set_id)
+    )
+    study_set = set_result.one_or_none()
+
+    if study_set is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Study set not found")
+
+    if study_set.owner_id != user_id and not study_set.is_public:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    total_cards = study_set.card_count or 0
+
+    # 2. Progress summary — max interval per card cho user này trong set này
+    max_interval_subq = (
+        select(
+            StudyProgress.card_id,
+            func.max(StudyProgress.interval).label("max_interval"),
+        )
+        .where(
+            StudyProgress.user_id == user_id,
+            StudyProgress.study_set_id == set_id,
+        )
+        .group_by(StudyProgress.card_id)
+        .subquery()
+    )
+
+    progress_result = await db.execute(
+        select(
+            func.count(
+                case(
+                    (max_interval_subq.c.max_interval >= KNOWN_THRESHOLD_DAYS, 1),
+                    else_=None,
+                )
+            ).label("known"),
+            func.count(
+                case(
+                    (max_interval_subq.c.max_interval < KNOWN_THRESHOLD_DAYS, 1),
+                    else_=None,
+                )
+            ).label("learning"),
+        ).select_from(max_interval_subq)
+    )
+    progress_row = progress_result.one()
+
+    known = int(progress_row.known or 0)
+    learning = int(progress_row.learning or 0)
+    not_started = max(0, total_cards - known - learning)
+    known_rate = round(known / total_cards * 100, 1) if total_cards > 0 else 0.0
+
+    # 3. Breakdown theo mode
+    mode_result = await db.execute(
+        select(
+            StudySession.mode,
+            func.count(StudySession.id).label("sessions"),
+            func.avg(
+                case(
+                    (StudySession.cards_studied > 0,
+                     StudySession.correct * 100.0 / StudySession.cards_studied),
+                    else_=0,
+                )
+            ).label("avg_accuracy"),
+            func.max(StudySession.ended_at).label("last_studied"),
+        )
+        .where(
+            StudySession.user_id == user_id,
+            StudySession.study_set_id == set_id,
+            StudySession.ended_at.is_not(None),
+        )
+        .group_by(StudySession.mode)
+        .order_by(StudySession.mode)
+    )
+    mode_rows = mode_result.all()
+
+    by_mode = [
+        ModeStats(
+            mode=row.mode,
+            sessions=int(row.sessions),
+            avg_accuracy=round(float(row.avg_accuracy or 0), 1),
+            last_studied=row.last_studied,
+        )
+        for row in mode_rows
+    ]
+
+    # 4. Tổng session + study time
+    total_result = await db.execute(
+        select(
+            func.count(StudySession.id).label("total_sessions"),
+            func.coalesce(
+                func.sum(
+                    func.extract("epoch", StudySession.ended_at - StudySession.created_at)
+                ),
+                0,
+            ).label("total_seconds"),
+        )
+        .where(
+            StudySession.user_id == user_id,
+            StudySession.study_set_id == set_id,
+            StudySession.ended_at.is_not(None),
+        )
+    )
+    total_row = total_result.one()
+
+    return SetStatsResponse(
+        set_id=str(set_id),
+        set_title=study_set.title,
+        card_count=total_cards,
+        progress_summary=ProgressSummary(
+            known=known,
+            learning=learning,
+            not_started=not_started,
+            known_rate=known_rate,
+        ),
+        by_mode=by_mode,
+        total_sessions=int(total_row.total_sessions or 0),
+        total_study_time_seconds=int(total_row.total_seconds or 0),
+    )
