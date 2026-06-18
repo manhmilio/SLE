@@ -1,13 +1,20 @@
 from __future__ import annotations
 import uuid
+from datetime import datetime, date, timedelta, timezone   # thêm datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, distinct, case
 
 from app.models.user import User
 from app.models.learning import StudyProgress, StudySession
-from app.schemas.stats import StatsOverviewResponse
+from app.schemas.stats import (                            # chuyển lên top
+    StatsOverviewResponse,
+    SessionHistoryItem,
+    SessionHistoryResponse,
+)
 
 KNOWN_THRESHOLD_DAYS = 7
+RANGE_DAYS: dict[str, int] = {"7d": 7, "30d": 30, "90d": 90}
 
 
 async def get_overview(db: AsyncSession, user_id: uuid.UUID) -> StatsOverviewResponse:
@@ -78,3 +85,95 @@ async def get_overview(db: AsyncSession, user_id: uuid.UUID) -> StatsOverviewRes
         total_study_time_seconds=int(session_row.total_seconds or 0),
         sets_studied=session_row.sets_studied or 0,
     )
+
+
+async def get_sessions_history(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    time_range: str,
+    group_by: str,
+) -> "SessionHistoryResponse":
+
+    days = RANGE_DAYS.get(time_range, 7)
+    now = datetime.now(timezone.utc)
+    start_dt = now - timedelta(days=days)
+
+    # DATE_TRUNC theo day hoặc week
+    trunc_unit = "week" if group_by == "week" else "day"
+    period_expr = func.date_trunc(trunc_unit, StudySession.ended_at).label("period")
+
+    result = await db.execute(
+        select(
+            period_expr,
+            func.count(StudySession.id).label("sessions"),
+            func.coalesce(func.sum(StudySession.cards_studied), 0).label("cards_studied"),
+            func.coalesce(func.sum(StudySession.correct), 0).label("correct"),
+            func.coalesce(func.sum(StudySession.incorrect), 0).label("incorrect"),
+            func.coalesce(
+                func.sum(
+                    func.extract("epoch", StudySession.ended_at - StudySession.created_at)
+                ),
+                0,
+            ).label("study_time_seconds"),
+        )
+        .where(
+            StudySession.user_id == user_id,
+            StudySession.ended_at.is_not(None),
+            StudySession.ended_at >= start_dt,
+        )
+        .group_by(period_expr)
+        .order_by(period_expr)
+    )
+    rows = result.all()
+
+    # Build lookup: date string → row
+    db_data: dict[str, object] = {}
+    for row in rows:
+        key = row.period.date().isoformat()
+        db_data[key] = row
+
+    # Helper build item
+    def make_item(key: str, row=None) -> SessionHistoryItem:
+        if row is None:
+            return SessionHistoryItem(
+                date=key,
+                sessions=0,
+                cards_studied=0,
+                correct=0,
+                incorrect=0,
+                accuracy=0.0,
+                study_time_seconds=0,
+            )
+        cards = int(row.cards_studied or 0)
+        correct = int(row.correct or 0)
+        incorrect = int(row.incorrect or 0)
+        accuracy = round(correct / cards * 100, 1) if cards > 0 else 0.0
+        return SessionHistoryItem(
+            date=key,
+            sessions=int(row.sessions),
+            cards_studied=cards,
+            correct=correct,
+            incorrect=incorrect,
+            accuracy=accuracy,
+            study_time_seconds=int(row.study_time_seconds or 0),
+        )
+
+    # Generate full date/week range, fill 0 cho ngày không có data
+    data: list[SessionHistoryItem] = []
+    current = start_dt.date()
+    end_date = now.date()
+
+    if group_by == "week":
+        # Lùi về thứ Hai của tuần chứa start_dt
+        current = current - timedelta(days=current.weekday())
+        while current <= end_date:
+            key = current.isoformat()
+            data.append(make_item(key, db_data.get(key)))
+            current += timedelta(weeks=1)
+    else:
+        while current <= end_date:
+            key = current.isoformat()
+            data.append(make_item(key, db_data.get(key)))
+            current += timedelta(days=1)
+
+    return SessionHistoryResponse(range=time_range, group_by=group_by, data=data)
