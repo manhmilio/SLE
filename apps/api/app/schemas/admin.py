@@ -145,3 +145,47 @@ class AdminSetUpdateResponse(BaseModel):
     id: UUID
     title: str
     is_public: bool
+
+
+# ═══════════════════════ Admin Stats ═══════════════════════
+
+class StreakBucket(BaseModel):
+    label: str       # "0", "1-7", "8-30", "30+"
+    count: int
+
+
+class AdminUserStatsResponse(BaseModel):
+    growth: list[ChartPoint]
+    streak_distribution: list[StreakBucket]
+    churn_rate: float
+
+
+class ModeDistributionItem(BaseModel):
+    mode: StudyMode
+    sessions: int
+    avg_accuracy: float
+
+
+class AdminLearningStatsResponse(BaseModel):
+    sessions_chart: list[ChartPoint]
+    mode_distribution: list[ModeDistributionItem]
+    avg_known_rate: float
+    avg_accuracy: float
+
+
+class TopSetItem(BaseModel):
+    id: UUID
+    title: str
+    owner_email: str
+    value: int
+
+
+class TagPopularity(BaseModel):
+    tag: str
+    count: int
+
+
+class AdminContentStatsResponse(BaseModel):
+    top_sets_by_sessions: list[TopSetItem]
+    top_sets_by_clones: list[TopSetItem]
+    popular_tags: list[TagPopularity]

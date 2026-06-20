@@ -6,10 +6,11 @@ from uuid import UUID
 from sqlalchemy import select, func, distinct, and_, or_, update, desc, asc
 from fastapi import HTTPException, status as http_status
 from app.core.security import hash_password
+from app.services.sm2_service import KNOWN_THRESHOLD_DAYS
 
 from app.models.user import User
 from app.models.content import StudySet
-from app.models.learning import StudySession, SetClone
+from app.models.learning import StudySession, SetClone, StudyProgress
 from app.models.user import User, RefreshToken
 from app.models.content import Card
 from app.schemas.admin import (
@@ -30,6 +31,13 @@ from app.schemas.admin import (
     AdminSetListResponse,
     AdminSetUpdateRequest,
     AdminSetUpdateResponse,
+    StreakBucket,
+    AdminUserStatsResponse,
+    ModeDistributionItem,
+    AdminLearningStatsResponse,
+    TopSetItem,
+    TagPopularity,
+    AdminContentStatsResponse,
 )
 
 VALID_RANGES = {"7d": 7, "30d": 30, "90d": 90}
@@ -572,3 +580,196 @@ async def delete_set(db: AsyncSession, set_id: UUID) -> None:
 
     await db.delete(study_set)
     await db.commit()
+
+
+# ═══════════════════════ Admin Stats ═══════════════════════
+
+async def get_user_stats(db: AsyncSession, range_str: str = "30d") -> AdminUserStatsResponse:
+    today = _today_utc()
+    days = VALID_RANGES.get(range_str, 30)
+    start_date = today - timedelta(days=days - 1)
+    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
+
+    growth_trunc = func.date_trunc("day", User.created_at)
+    growth_rows = (
+        await db.execute(
+            select(growth_trunc.label("day"), func.count().label("cnt"))
+            .where(User.created_at >= start_dt)
+            .group_by(growth_trunc)
+            .order_by(growth_trunc)
+        )
+    ).all()
+    growth_map = {row.day.date().isoformat(): row.cnt for row in growth_rows}
+    growth: list[ChartPoint] = []
+    current = start_date
+    while current <= today:
+        growth.append(ChartPoint(date=current.isoformat(), count=growth_map.get(current.isoformat(), 0)))
+        current += timedelta(days=1)
+
+    all_streaks = (await db.execute(select(User.streak))).scalars().all()
+    bucket_counts = {"0": 0, "1-7": 0, "8-30": 0, "30+": 0}
+    for s in all_streaks:
+        if s == 0:
+            bucket_counts["0"] += 1
+        elif s <= 7:
+            bucket_counts["1-7"] += 1
+        elif s <= 30:
+            bucket_counts["8-30"] += 1
+        else:
+            bucket_counts["30+"] += 1
+    streak_distribution = [StreakBucket(label=k, count=v) for k, v in bucket_counts.items()]
+
+    total_users = await db.scalar(select(func.count()).select_from(User))
+    cutoff = _now_utc() - timedelta(days=30)
+    churned = await db.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(
+            or_(
+                and_(User.last_studied.is_not(None), User.last_studied < cutoff),
+                and_(User.last_studied.is_(None), User.created_at < cutoff),
+            )
+        )
+    )
+    churn_rate = round((churned or 0) / total_users * 100, 2) if total_users else 0.0
+
+    return AdminUserStatsResponse(
+        growth=growth,
+        streak_distribution=streak_distribution,
+        churn_rate=churn_rate,
+    )
+
+
+async def get_learning_stats(db: AsyncSession, range_str: str = "30d") -> AdminLearningStatsResponse:
+    today = _today_utc()
+    days = VALID_RANGES.get(range_str, 30)
+    start_date = today - timedelta(days=days - 1)
+    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
+
+    sess_trunc = func.date_trunc("day", StudySession.created_at)
+    sess_rows = (
+        await db.execute(
+            select(sess_trunc.label("day"), func.count().label("cnt"))
+            .where(and_(StudySession.ended_at.is_not(None), StudySession.created_at >= start_dt))
+            .group_by(sess_trunc)
+            .order_by(sess_trunc)
+        )
+    ).all()
+    sess_map = {row.day.date().isoformat(): row.cnt for row in sess_rows}
+    sessions_chart: list[ChartPoint] = []
+    current = start_date
+    while current <= today:
+        sessions_chart.append(ChartPoint(date=current.isoformat(), count=sess_map.get(current.isoformat(), 0)))
+        current += timedelta(days=1)
+
+    mode_rows = (
+        await db.execute(
+            select(
+                StudySession.mode,
+                func.count().label("sessions"),
+                func.avg(
+                    StudySession.correct * 100.0 / func.greatest(StudySession.cards_studied, 1)
+                ).label("avg_accuracy"),
+            )
+            .where(StudySession.ended_at.is_not(None))
+            .group_by(StudySession.mode)
+        )
+    ).all()
+    mode_distribution = [
+        ModeDistributionItem(
+            mode=row.mode,
+            sessions=row.sessions,
+            avg_accuracy=round(float(row.avg_accuracy or 0), 2),
+        )
+        for row in mode_rows
+    ]
+
+    max_interval_subq = (
+        select(
+            StudyProgress.user_id,
+            StudyProgress.card_id,
+            func.max(StudyProgress.interval).label("max_interval"),
+        )
+        .group_by(StudyProgress.user_id, StudyProgress.card_id)
+        .subquery()
+    )
+    total_progress_cards = await db.scalar(select(func.count()).select_from(max_interval_subq))
+    known_cards = await db.scalar(
+        select(func.count())
+        .select_from(max_interval_subq)
+        .where(max_interval_subq.c.max_interval >= KNOWN_THRESHOLD_DAYS)
+    )
+    avg_known_rate = round((known_cards or 0) / total_progress_cards * 100, 2) if total_progress_cards else 0.0
+
+    overall_avg_accuracy = await db.scalar(
+        select(
+            func.avg(StudySession.correct * 100.0 / func.greatest(StudySession.cards_studied, 1))
+        ).where(StudySession.ended_at.is_not(None))
+    )
+
+    return AdminLearningStatsResponse(
+        sessions_chart=sessions_chart,
+        mode_distribution=mode_distribution,
+        avg_known_rate=avg_known_rate,
+        avg_accuracy=round(float(overall_avg_accuracy or 0), 2),
+    )
+
+
+async def get_content_stats(db: AsyncSession) -> AdminContentStatsResponse:
+    sessions_count_subq = (
+        select(StudySession.study_set_id, func.count(StudySession.id).label("cnt"))
+        .where(StudySession.ended_at.is_not(None))
+        .group_by(StudySession.study_set_id)
+        .subquery()
+    )
+    top_sessions_rows = (
+        await db.execute(
+            select(StudySet.id, StudySet.title, User.email, sessions_count_subq.c.cnt)
+            .join(sessions_count_subq, sessions_count_subq.c.study_set_id == StudySet.id)
+            .join(User, User.id == StudySet.owner_id)
+            .order_by(sessions_count_subq.c.cnt.desc())
+            .limit(10)
+        )
+    ).all()
+    top_sets_by_sessions = [
+        TopSetItem(id=row.id, title=row.title, owner_email=row.email, value=row.cnt)
+        for row in top_sessions_rows
+    ]
+
+    clones_count_subq = (
+        select(SetClone.original_set_id, func.count(SetClone.id).label("cnt"))
+        .group_by(SetClone.original_set_id)
+        .subquery()
+    )
+    top_clones_rows = (
+        await db.execute(
+            select(StudySet.id, StudySet.title, User.email, clones_count_subq.c.cnt)
+            .join(clones_count_subq, clones_count_subq.c.original_set_id == StudySet.id)
+            .join(User, User.id == StudySet.owner_id)
+            .order_by(clones_count_subq.c.cnt.desc())
+            .limit(10)
+        )
+    ).all()
+    top_sets_by_clones = [
+        TopSetItem(id=row.id, title=row.title, owner_email=row.email, value=row.cnt)
+        for row in top_clones_rows
+    ]
+
+    tag_subq = (
+        select(func.unnest(StudySet.tags).label("tag")).where(StudySet.is_public.is_(True))
+    ).subquery()
+    tag_rows = (
+        await db.execute(
+            select(tag_subq.c.tag, func.count().label("cnt"))
+            .group_by(tag_subq.c.tag)
+            .order_by(func.count().desc())
+            .limit(10)
+        )
+    ).all()
+    popular_tags = [TagPopularity(tag=row.tag, count=row.cnt) for row in tag_rows]
+
+    return AdminContentStatsResponse(
+        top_sets_by_sessions=top_sets_by_sessions,
+        top_sets_by_clones=top_sets_by_clones,
+        popular_tags=popular_tags,
+    )

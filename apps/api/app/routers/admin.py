@@ -12,6 +12,9 @@ from app.schemas.admin import (
     AdminSetListResponse,
     AdminSetUpdateRequest,
     AdminSetUpdateResponse,
+    AdminUserStatsResponse,
+    AdminLearningStatsResponse,
+    AdminContentStatsResponse,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -122,3 +125,29 @@ async def delete_set(
     current_user: AdminUser,
 ):
     await admin_service.delete_set(db=db, set_id=set_id)
+
+
+@router.get("/stats/users", response_model=AdminUserStatsResponse)
+async def get_user_stats(
+    db: DB,
+    current_user: AdminUser,
+    range: str = Query(default="30d", pattern="^(7d|30d|90d)$", alias="range"),
+):
+    return await admin_service.get_user_stats(db=db, range_str=range)
+
+
+@router.get("/stats/learning", response_model=AdminLearningStatsResponse)
+async def get_learning_stats(
+    db: DB,
+    current_user: AdminUser,
+    range: str = Query(default="30d", pattern="^(7d|30d|90d)$", alias="range"),
+):
+    return await admin_service.get_learning_stats(db=db, range_str=range)
+
+
+@router.get("/stats/content", response_model=AdminContentStatsResponse)
+async def get_content_stats(
+    db: DB,
+    current_user: AdminUser,
+):
+    return await admin_service.get_content_stats(db=db)
