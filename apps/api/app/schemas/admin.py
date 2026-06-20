@@ -117,3 +117,31 @@ class AdminUserUpdateResponse(BaseModel):
     role: str
     is_active: bool
     temp_password: str | None = None
+
+
+class AdminSetListItem(BaseModel):
+    id: UUID
+    title: str
+    owner_email: str
+    is_public: bool
+    card_count: int
+    total_sessions: int
+    total_clones: int
+    created_at: datetime
+
+
+class AdminSetListResponse(BaseModel):
+    items: list[AdminSetListItem]
+    total: int
+    page: int
+    limit: int
+
+
+class AdminSetUpdateRequest(BaseModel):
+    is_public: bool
+
+
+class AdminSetUpdateResponse(BaseModel):
+    id: UUID
+    title: str
+    is_public: bool

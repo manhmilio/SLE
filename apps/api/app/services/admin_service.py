@@ -9,7 +9,7 @@ from app.core.security import hash_password
 
 from app.models.user import User
 from app.models.content import StudySet
-from app.models.learning import StudySession
+from app.models.learning import StudySession, SetClone
 from app.models.user import User, RefreshToken
 from app.models.content import Card
 from app.schemas.admin import (
@@ -26,6 +26,10 @@ from app.schemas.admin import (
     AdminUserDetailResponse,
     AdminUserUpdateRequest,
     AdminUserUpdateResponse,
+    AdminSetListItem,
+    AdminSetListResponse,
+    AdminSetUpdateRequest,
+    AdminSetUpdateResponse,
 )
 
 VALID_RANGES = {"7d": 7, "30d": 30, "90d": 90}
@@ -457,4 +461,114 @@ async def delete_user(db: AsyncSession, user_id: UUID, current_admin_id: UUID) -
         raise _not_found("User")
 
     await db.delete(user)
+    await db.commit()
+
+
+# ═══════════════════════ Set Management ═══════════════════════
+
+async def get_sets_list(
+    db: AsyncSession,
+    owner_id: UUID | None,
+    is_public: bool | None,
+    sort_by: str,
+    sort_order: str,
+    page: int,
+    limit: int,
+) -> AdminSetListResponse:
+    sessions_count_subq = (
+        select(
+            StudySession.study_set_id,
+            func.count(StudySession.id).label("total_sessions"),
+        )
+        .where(StudySession.ended_at.is_not(None))
+        .group_by(StudySession.study_set_id)
+        .subquery()
+    )
+    clones_count_subq = (
+        select(
+            SetClone.original_set_id,
+            func.count(SetClone.id).label("total_clones"),
+        )
+        .group_by(SetClone.original_set_id)
+        .subquery()
+    )
+
+    conditions = []
+    if owner_id is not None:
+        conditions.append(StudySet.owner_id == owner_id)
+    if is_public is not None:
+        conditions.append(StudySet.is_public == is_public)
+
+    count_query = select(func.count()).select_from(StudySet)
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
+    total = await db.scalar(count_query)
+
+    query = (
+        select(
+            StudySet,
+            User.email.label("owner_email"),
+            func.coalesce(sessions_count_subq.c.total_sessions, 0).label("total_sessions"),
+            func.coalesce(clones_count_subq.c.total_clones, 0).label("total_clones"),
+        )
+        .join(User, User.id == StudySet.owner_id)
+        .outerjoin(sessions_count_subq, sessions_count_subq.c.study_set_id == StudySet.id)
+        .outerjoin(clones_count_subq, clones_count_subq.c.original_set_id == StudySet.id)
+    )
+    if conditions:
+        query = query.where(and_(*conditions))
+
+    order_func = desc if sort_order == "desc" else asc
+    if sort_by == "session_count":
+        order_col = func.coalesce(sessions_count_subq.c.total_sessions, 0)
+    elif sort_by == "clone_count":
+        order_col = func.coalesce(clones_count_subq.c.total_clones, 0)
+    elif sort_by == "card_count":
+        order_col = StudySet.card_count
+    else:
+        order_col = StudySet.created_at
+
+    query = query.order_by(order_func(order_col)).offset((page - 1) * limit).limit(limit)
+
+    rows = (await db.execute(query)).all()
+
+    items = [
+        AdminSetListItem(
+            id=row.StudySet.id,
+            title=row.StudySet.title,
+            owner_email=row.owner_email,
+            is_public=row.StudySet.is_public,
+            card_count=row.StudySet.card_count,
+            total_sessions=row.total_sessions,
+            total_clones=row.total_clones,
+            created_at=row.StudySet.created_at,
+        )
+        for row in rows
+    ]
+
+    return AdminSetListResponse(items=items, total=total or 0, page=page, limit=limit)
+
+
+async def update_set(
+    db: AsyncSession, set_id: UUID, payload: AdminSetUpdateRequest
+) -> AdminSetUpdateResponse:
+    study_set = await db.get(StudySet, set_id)
+    if study_set is None:
+        raise _not_found("Study set")
+
+    study_set.is_public = payload.is_public
+    await db.commit()
+    await db.refresh(study_set)
+
+    return AdminSetUpdateResponse(
+        id=study_set.id, title=study_set.title, is_public=study_set.is_public
+    )
+
+
+async def delete_set(db: AsyncSession, set_id: UUID) -> None:
+    study_set = await db.get(StudySet, set_id)
+    if study_set is None:
+        raise _not_found("Study set")
+
+    await db.delete(study_set)
     await db.commit()

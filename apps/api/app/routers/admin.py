@@ -9,6 +9,9 @@ from app.schemas.admin import (
     AdminUserDetailResponse,
     AdminUserUpdateRequest,
     AdminUserUpdateResponse,
+    AdminSetListResponse,
+    AdminSetUpdateRequest,
+    AdminSetUpdateResponse,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -75,3 +78,47 @@ async def delete_user(
     current_user: AdminUser,
 ):
     await admin_service.delete_user(db=db, user_id=user_id, current_admin_id=current_user.id)
+
+
+@router.get("/sets", response_model=AdminSetListResponse)
+async def list_sets(
+    db: DB,
+    current_user: AdminUser,
+    owner_id: UUID | None = Query(default=None),
+    is_public: bool | None = Query(default=None),
+    sort_by: str = Query(
+        default="created_at",
+        pattern="^(created_at|session_count|clone_count|card_count)$",
+    ),
+    sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    return await admin_service.get_sets_list(
+        db=db,
+        owner_id=owner_id,
+        is_public=is_public,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.patch("/sets/{set_id}", response_model=AdminSetUpdateResponse)
+async def update_set(
+    set_id: UUID,
+    payload: AdminSetUpdateRequest,
+    db: DB,
+    current_user: AdminUser,
+):
+    return await admin_service.update_set(db=db, set_id=set_id, payload=payload)
+
+
+@router.delete("/sets/{set_id}", status_code=204)
+async def delete_set(
+    set_id: UUID,
+    db: DB,
+    current_user: AdminUser,
+):
+    await admin_service.delete_set(db=db, set_id=set_id)
