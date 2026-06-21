@@ -1,38 +1,40 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ─── Python ───────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
 
-# Dependencies
-node_modules
-.pnp
-.pnp.js
+# ─── Node ─────────────────────────────────────
+node_modules/
+.next/
+.turbo/
+out/
+dist/
 
-# Local env files
+# ─── Env files ────────────────────────────────
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 
-# Testing
-coverage
+# ─── Docker ───────────────────────────────────
+docker-compose.override.yml
 
-# Turbo
-.turbo
+# ─── Database ─────────────────────────────────
+*.sqlite
+*.db
 
-# Vercel
-.vercel
-
-# Build Outputs
-.next/
-out/
-build
-dist
-
-
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Misc
+# ─── OS ───────────────────────────────────────
 .DS_Store
-*.pem
+Thumbs.db
+desktop.ini
+
+# ─── IDE ──────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.user

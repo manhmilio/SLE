@@ -157,3 +157,7 @@ Learn more about the power of Turborepo:
 - [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
 - [Configuration Options](https://turborepo.dev/docs/reference/configuration)
 - [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+
+<!-- run server -->
+uvicorn main:app --reload --port 8000
+(Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned) ; (& d:\My-learning-peroject\SLE\sle\apps\api\.venv\Scripts\Activate.ps1) 
