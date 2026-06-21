@@ -15,6 +15,8 @@ from app.schemas.admin import (
     AdminUserStatsResponse,
     AdminLearningStatsResponse,
     AdminContentStatsResponse,
+    SystemConfigResponse,
+    SystemConfigUpdateRequest,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -151,3 +153,20 @@ async def get_content_stats(
     current_user: AdminUser,
 ):
     return await admin_service.get_content_stats(db=db)
+
+
+@router.get("/config", response_model=SystemConfigResponse)
+async def get_config(
+    db: DB,
+    current_user: AdminUser,
+):
+    return await admin_service.get_config(db=db)
+
+
+@router.patch("/config", response_model=SystemConfigResponse)
+async def update_config(
+    payload: SystemConfigUpdateRequest,
+    db: DB,
+    current_user: AdminUser,
+):
+    return await admin_service.update_config(db=db, payload=payload)

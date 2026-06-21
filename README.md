@@ -160,3 +160,4 @@ Learn more about the power of Turborepo:
 
 <!-- run server -->
 uvicorn main:app --reload --port 8000
+(Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned) ; (& d:\My-learning-peroject\SLE\sle\apps\api\.venv\Scripts\Activate.ps1) 

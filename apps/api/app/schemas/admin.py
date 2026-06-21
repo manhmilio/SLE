@@ -189,3 +189,26 @@ class AdminContentStatsResponse(BaseModel):
     top_sets_by_sessions: list[TopSetItem]
     top_sets_by_clones: list[TopSetItem]
     popular_tags: list[TagPopularity]
+
+
+# ═══════════════════════ System Config ═══════════════════════
+
+class SystemConfigResponse(BaseModel):
+    initial_ease_factor: float
+    min_ease_factor: float
+    known_threshold_days: int
+    max_sets_per_user: int
+    max_cards_per_set: int
+    max_image_size_mb: int
+    allow_registration: bool
+    updated_at: datetime
+
+
+class SystemConfigUpdateRequest(BaseModel):
+    initial_ease_factor: float | None = None
+    min_ease_factor: float | None = None
+    known_threshold_days: int | None = None
+    max_sets_per_user: int | None = None
+    max_cards_per_set: int | None = None
+    max_image_size_mb: int | None = None
+    allow_registration: bool | None = None

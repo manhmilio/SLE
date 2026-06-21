@@ -7,6 +7,8 @@ from sqlalchemy import select, func, distinct, and_, or_, update, desc, asc
 from fastapi import HTTPException, status as http_status
 from app.core.security import hash_password
 from app.services.sm2_service import KNOWN_THRESHOLD_DAYS
+from app.models.config import SystemConfig
+
 
 from app.models.user import User
 from app.models.content import StudySet
@@ -38,6 +40,8 @@ from app.schemas.admin import (
     TopSetItem,
     TagPopularity,
     AdminContentStatsResponse,
+    SystemConfigResponse, 
+    SystemConfigUpdateRequest,
 )
 
 VALID_RANGES = {"7d": 7, "30d": 30, "90d": 90}
@@ -772,4 +776,62 @@ async def get_content_stats(db: AsyncSession) -> AdminContentStatsResponse:
         top_sets_by_sessions=top_sets_by_sessions,
         top_sets_by_clones=top_sets_by_clones,
         popular_tags=popular_tags,
+    )
+
+
+# ═══════════════════════ System Config ═══════════════════════
+
+CONFIG_ROW_ID = 1
+
+
+async def get_config(db: AsyncSession) -> SystemConfigResponse:
+    config = await db.get(SystemConfig, CONFIG_ROW_ID)
+    if config is None:
+        raise _not_found("System config")
+
+    return SystemConfigResponse(
+        initial_ease_factor=config.initial_ease_factor,
+        min_ease_factor=config.min_ease_factor,
+        known_threshold_days=config.known_threshold_days,
+        max_sets_per_user=config.max_sets_per_user,
+        max_cards_per_set=config.max_cards_per_set,
+        max_image_size_mb=config.max_image_size_mb,
+        allow_registration=config.allow_registration,
+        updated_at=config.updated_at,
+    )
+
+
+async def update_config(
+    db: AsyncSession, payload: SystemConfigUpdateRequest
+) -> SystemConfigResponse:
+    config = await db.get(SystemConfig, CONFIG_ROW_ID)
+    if config is None:
+        raise _not_found("System config")
+
+    update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
+    if not update_data:
+        raise _bad_request("No update fields provided")
+
+    if "min_ease_factor" in update_data or "initial_ease_factor" in update_data:
+        new_min = update_data.get("min_ease_factor", config.min_ease_factor)
+        new_initial = update_data.get("initial_ease_factor", config.initial_ease_factor)
+        if new_min > new_initial:
+            raise _bad_request("min_ease_factor cannot be greater than initial_ease_factor")
+
+    for field, value in update_data.items():
+        setattr(config, field, value)
+    config.updated_at = _now_utc()
+
+    await db.commit()
+    await db.refresh(config)
+
+    return SystemConfigResponse(
+        initial_ease_factor=config.initial_ease_factor,
+        min_ease_factor=config.min_ease_factor,
+        known_threshold_days=config.known_threshold_days,
+        max_sets_per_user=config.max_sets_per_user,
+        max_cards_per_set=config.max_cards_per_set,
+        max_image_size_mb=config.max_image_size_mb,
+        allow_registration=config.allow_registration,
+        updated_at=config.updated_at,
     )
