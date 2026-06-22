@@ -17,11 +17,12 @@ from app.schemas.stats import (
     SetStatsResponse,
 )
 
-KNOWN_THRESHOLD_DAYS = 7
+from app.services.config_service import get_current_config
 RANGE_DAYS: dict[str, int] = {"7d": 7, "30d": 30, "90d": 90}
 
 
 async def get_overview(db: AsyncSession, user_id: uuid.UUID) -> StatsOverviewResponse:
+    config = await get_current_config(db)
     # 1. Streak + last_studied từ bảng users
     user_result = await db.execute(
         select(User.streak, User.last_studied).where(User.id == user_id)
@@ -45,13 +46,13 @@ async def get_overview(db: AsyncSession, user_id: uuid.UUID) -> StatsOverviewRes
         select(
             func.count(
                 case(
-                    (max_interval_subq.c.max_interval >= KNOWN_THRESHOLD_DAYS, 1),
+                    (max_interval_subq.c.max_interval >= config.known_threshold_days, 1),
                     else_=None,
                 )
             ).label("known"),
             func.count(
                 case(
-                    (max_interval_subq.c.max_interval < KNOWN_THRESHOLD_DAYS, 1),
+                    (max_interval_subq.c.max_interval < config.known_threshold_days, 1),
                     else_=None,
                 )
             ).label("learning"),
@@ -204,6 +205,7 @@ async def get_set_stats(
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Access denied")
 
+    config = await get_current_config(db)
     total_cards = study_set.card_count or 0
 
     # 2. Progress summary — max interval per card cho user này trong set này
@@ -224,13 +226,13 @@ async def get_set_stats(
         select(
             func.count(
                 case(
-                    (max_interval_subq.c.max_interval >= KNOWN_THRESHOLD_DAYS, 1),
+                    (max_interval_subq.c.max_interval >= config.known_threshold_days, 1),
                     else_=None,
                 )
             ).label("known"),
             func.count(
                 case(
-                    (max_interval_subq.c.max_interval < KNOWN_THRESHOLD_DAYS, 1),
+                    (max_interval_subq.c.max_interval < config.known_threshold_days, 1),
                     else_=None,
                 )
             ).label("learning"),

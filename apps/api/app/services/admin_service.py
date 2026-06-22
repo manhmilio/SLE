@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select, func, distinct, and_, or_, update, desc, asc
 from fastapi import HTTPException, status as http_status
 from app.core.security import hash_password
-from app.services.sm2_service import KNOWN_THRESHOLD_DAYS
+from app.services.config_service import get_current_config
 from app.models.config import SystemConfig
 
 
@@ -645,6 +645,7 @@ async def get_user_stats(db: AsyncSession, range_str: str = "30d") -> AdminUserS
 
 
 async def get_learning_stats(db: AsyncSession, range_str: str = "30d") -> AdminLearningStatsResponse:
+    config = await get_current_config(db)
     today = _today_utc()
     days = VALID_RANGES.get(range_str, 30)
     start_date = today - timedelta(days=days - 1)
@@ -701,7 +702,7 @@ async def get_learning_stats(db: AsyncSession, range_str: str = "30d") -> AdminL
     known_cards = await db.scalar(
         select(func.count())
         .select_from(max_interval_subq)
-        .where(max_interval_subq.c.max_interval >= KNOWN_THRESHOLD_DAYS)
+        .where(max_interval_subq.c.max_interval >= config.known_threshold_days)
     )
     avg_known_rate = round((known_cards or 0) / total_progress_cards * 100, 2) if total_progress_cards else 0.0
 
