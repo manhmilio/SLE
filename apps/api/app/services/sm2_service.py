@@ -33,6 +33,7 @@ def calculate_sm2(
     current: SM2Input,
     quality: int,
     known_threshold_days: int = KNOWN_THRESHOLD_DAYS,
+    min_ease_factor: float = MIN_EASE_FACTOR,
 ) -> SM2Output:
     """
     Tính SM-2 thuần logic, không truy cập DB.
@@ -47,12 +48,12 @@ def calculate_sm2(
 
     if quality >= 3:
         # Đúng: tính ease_factor mới trước, rồi dùng nó tính interval
-        new_ef = max(MIN_EASE_FACTOR, ef + 0.1 - (5 - quality) * 0.08)
+        new_ef = max(min_ease_factor, ef + 0.1 - (5 - quality) * 0.08)
         new_interval = round(max(1, interval) * new_ef)
         new_repetitions = repetitions + 1
     else:
         # Sai: giảm ease_factor, reset interval và repetitions
-        new_ef = max(MIN_EASE_FACTOR, ef - 0.2)
+        new_ef = max(min_ease_factor, ef - 0.2)
         new_interval = 1
         new_repetitions = 0
 

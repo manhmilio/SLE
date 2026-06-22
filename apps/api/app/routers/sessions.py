@@ -19,17 +19,18 @@ from app.schemas.session import (
     StudyMode,
 )
 from app.services.sm2_service import KNOWN_THRESHOLD_DAYS, SM2Input, calculate_sm2, map_quality
+from app.services.config_service import get_current_config
 from app.services.streak_service import update_streak
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 # ── Helper ─────────────────────────────────────────────────────────────────────
-def _derive_status(progress) -> CardStatus:
+def _derive_status(progress, known_threshold_days: int = KNOWN_THRESHOLD_DAYS) -> CardStatus:
     """StudyProgress không có cột status → derive từ interval."""
     if progress is None:
         return CardStatus.not_started
-    if progress.interval >= KNOWN_THRESHOLD_DAYS:
+    if progress.interval >= known_threshold_days:
         return CardStatus.known
     return CardStatus.learning
 
@@ -62,7 +63,7 @@ async def create_session(
     )
     db.add(session)
     await db.flush()  # lấy session.id
-
+    config = await get_current_config(db)
     # 4. Lấy cards + SM-2 state (LEFT JOIN study_progress)
     stmt = (
         select(Card, StudyProgress)
@@ -98,7 +99,7 @@ async def create_session(
             image_url=card.image_url,
             order=card.order,
             next_review=progress.next_review if progress else None,
-            status=_derive_status(progress),
+            status=_derive_status(progress, config.known_threshold_days),
         )
         for card, progress in cards_to_study
     ]
@@ -142,6 +143,7 @@ async def submit_answer(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    config = await get_current_config(db)
     # 5. Lấy StudyProgress hiện tại (nếu có)
     stmt = select(StudyProgress).where(
         and_(
@@ -154,11 +156,16 @@ async def submit_answer(
 
     # 6. Tính SM-2
     current_sm2 = SM2Input(
-        ease_factor=progress.ease_factor if progress else 2.5,
+        ease_factor=progress.ease_factor if progress else config.initial_ease_factor,
         interval=progress.interval if progress else 0,
         repetitions=progress.repetitions if progress else 0,
     )
-    result = calculate_sm2(current_sm2, quality)
+    result = calculate_sm2(
+        current_sm2,
+        quality,
+        known_threshold_days=config.known_threshold_days,
+        min_ease_factor=config.min_ease_factor,
+    )
 
     # 7. Upsert StudyProgress
     now = datetime.now(timezone.utc)
