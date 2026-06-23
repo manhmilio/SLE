@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.content import StudySet, Folder, Card
 from app.models.learning import SetClone
+from fastapi import HTTPException, status
+from app.services.config_service import get_current_config
 
 from app.models.content import StudySet, Folder
 from app.schemas.study_set import StudySetCreate, StudySetUpdate
@@ -64,6 +66,16 @@ class SetService:
             folder = await db.get(Folder, data.folder_id)
             if not folder or folder.owner_id != user_id:
                 raise ValueError("Folder not found")
+
+        config = await get_current_config(db)
+        current_count = await db.scalar(
+            select(func.count()).select_from(StudySet).where(StudySet.owner_id == user_id)
+        )
+        if (current_count or 0) >= config.max_sets_per_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Maximum number of sets reached ({config.max_sets_per_user})",
+            )
 
         study_set = StudySet(owner_id=user_id, **data.model_dump())
         db.add(study_set)
