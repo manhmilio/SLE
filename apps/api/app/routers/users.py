@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, status, UploadFile, File
 from app.dependencies import CurrentUser, DB
 from app.schemas.user import UserProfile, UpdateProfileRequest, ChangePasswordRequest, AvatarUploadResponse
 from app.services import user_service, minio_service
+from app.services.config_service import get_current_config
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -53,6 +54,7 @@ async def upload_avatar(
 ):
     # Đọc file content
     file_data = await file.read()
+    config = await get_current_config(db)
 
     # Upload lên MinIO (validate bên trong service)
     try:
@@ -60,6 +62,7 @@ async def upload_avatar(
             file_data=file_data,
             content_type=file.content_type or "",
             user_id=current_user.id,
+            max_size_mb=config.max_image_size_mb,
         )
     except ValueError as exc:
         raise HTTPException(

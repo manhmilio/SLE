@@ -47,7 +47,9 @@ def ensure_bucket_exists(bucket_name: str) -> None:
         client.set_bucket_policy(bucket_name, policy)
 
 
-def upload_avatar(file_data: bytes, content_type: str, user_id: uuid.UUID) -> str:
+def upload_avatar(
+    file_data: bytes, content_type: str, user_id: uuid.UUID, max_size_mb: int = 5
+) -> str:
     """
     Upload ảnh avatar lên MinIO.
     Trả về public URL của ảnh.
@@ -60,8 +62,9 @@ def upload_avatar(file_data: bytes, content_type: str, user_id: uuid.UUID) -> st
         )
 
     # Validate file size
-    if len(file_data) > MAX_FILE_SIZE:
-        raise ValueError("File size exceeds 5MB limit")
+    max_size_bytes = max_size_mb * 1024 * 1024
+    if len(file_data) > max_size_bytes:
+        raise ValueError(f"File size exceeds {max_size_mb}MB limit")
 
     # Tạo tên file unique theo user_id
     ext = content_type.split("/")[-1]   # jpeg / png / webp / gif
@@ -87,7 +90,9 @@ def upload_avatar(file_data: bytes, content_type: str, user_id: uuid.UUID) -> st
     scheme = "https" if settings.MINIO_USE_SSL else "http"
     return f"{scheme}://{endpoint}/{bucket}/{object_name}"
 
-def upload_card_image(file_data: bytes, content_type: str, card_id: str) -> str:
+def upload_card_image(
+    file_data: bytes, content_type: str, card_id: str, max_size_mb: int = 5
+) -> str:
     """
     Upload ảnh card lên MinIO.
     Trả về public URL.
@@ -96,9 +101,9 @@ def upload_card_image(file_data: bytes, content_type: str, card_id: str) -> str:
     if content_type not in allowed_types:
         raise ValueError(f"Loại file không hợp lệ. Chỉ chấp nhận: {', '.join(allowed_types)}")
 
-    max_size = 5 * 1024 * 1024  # 5MB
-    if len(file_data) > max_size:
-        raise ValueError("File quá lớn. Tối đa 5MB")
+    max_size_bytes = max_size_mb * 1024 * 1024
+    if len(file_data) > max_size_bytes:
+        raise ValueError(f"File quá lớn. Tối đa {max_size_mb}MB")
 
     ext_map = {
         "image/jpeg": "jpg",

@@ -6,6 +6,7 @@ from app.schemas.card import CardCreate, CardUpdate, CardResponse, CardReorderRe
 from app.services.card_service import CardService
 from app.dependencies import CurrentUser, DB
 from app.services.minio_service import upload_card_image
+from app.services.config_service import get_current_config
 
 router = APIRouter(prefix="/sets", tags=["cards"])
 service = CardService()
@@ -117,9 +118,12 @@ async def upload_card_image_endpoint(
 
     file_data = await file.read()
     content_type = file.content_type or ""
+    config = await get_current_config(db)
 
     try:
-        image_url = upload_card_image(file_data, content_type, str(card_id))
+        image_url = upload_card_image(
+            file_data, content_type, str(card_id), max_size_mb=config.max_image_size_mb
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
