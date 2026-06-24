@@ -5,6 +5,8 @@ from datetime import timedelta, timezone, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException, status
+from app.services.config_service import get_current_config
 
 from app.core.config import settings
 from app.core.security import (
@@ -51,7 +53,21 @@ async def register_user(
     """
     Tạo user mới, issue access + refresh token.
     Raises ValueError nếu email đã tồn tại.
+    Raises HTTPException 403 nếu registration đang bị khóa.
     """
+    config = await get_current_config(db)
+    if not config.allow_registration:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "REGISTRATION_DISABLED",
+                    "message": "New user registration is currently disabled",
+                },
+            },
+        )
+
     existing = await get_user_by_email(db, data.email)
     if existing:
         raise ValueError("Email already registered")
