@@ -42,3 +42,9 @@ class CardReorderRequest(BaseModel):
         ):
             raise ValueError("prev_order phải nhỏ hơn next_order")
         return self
+    
+class CardListResponse(BaseModel):
+    items: list[CardResponse]
+    total: int
+    page: int
+    page_size: int

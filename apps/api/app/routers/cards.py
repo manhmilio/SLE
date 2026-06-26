@@ -2,7 +2,7 @@ from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, UploadFile
 
-from app.schemas.card import CardCreate, CardUpdate, CardResponse, CardReorderRequest
+from app.schemas.card import CardCreate, CardUpdate, CardResponse, CardReorderRequest, CardListResponse
 from app.services.card_service import CardService
 from app.dependencies import CurrentUser, DB
 from app.services.minio_service import upload_card_image
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/sets", tags=["cards"])
 service = CardService()
 
 
-@router.get("/{set_id}/cards", response_model=dict)
+@router.get("/{set_id}/cards", response_model=CardListResponse)
 async def list_cards(
     set_id: UUID,
     current_user: CurrentUser,
@@ -23,13 +23,12 @@ async def list_cards(
     cards, total = await service.get_cards(
         db, set_id, current_user.id, page, page_size
     )
-    return {
-        "items": [CardResponse.model_validate(c) for c in cards],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
-
+    return CardListResponse(
+        items=[CardResponse.model_validate(c) for c in cards],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 @router.get("/{set_id}/cards/{card_id}", response_model=CardResponse)
 async def get_card(

@@ -1,0 +1,15 @@
+{
+  "name": "@repo/types",
+  "version": "0.0.0",
+  "private": true,
+  "types": "./api.d.ts",
+  "exports": {
+    ".": "./api.d.ts"
+  },
+  "scripts": {
+    "generate:types": "openapi-typescript http://localhost:8000/openapi.json -o ./api.d.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.1"
+  }
+}
