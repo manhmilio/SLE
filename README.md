@@ -164,3 +164,8 @@ uvicorn main:app --reload --port 8000
 docker compose up -d
 cd apps\api
 .venv\Scripts\activate
+
+cd apps/web
+npx tsc --noEmit
+
+npm run dev
