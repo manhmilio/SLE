@@ -2,7 +2,13 @@ import { Sprout } from "lucide-react";
 import { SetCard } from "@/components/sets/set-card";
 import type { StudySet } from "@/lib/api/sets.api";
 
-export function SetGrid({ sets }: { sets: StudySet[] }) {
+interface SetGridProps {
+  sets: StudySet[];
+  onEdit?: (set: StudySet) => void;
+  onDelete?: (set: StudySet) => void;
+}
+
+export function SetGrid({ sets, onEdit, onDelete }: SetGridProps) {
   if (sets.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-12 text-center">
@@ -18,7 +24,7 @@ export function SetGrid({ sets }: { sets: StudySet[] }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {sets.map((set) => (
-        <SetCard key={set.id} set={set} />
+        <SetCard key={set.id} set={set} onEdit={onEdit} onDelete={onDelete} />
       ))}
     </div>
   );
