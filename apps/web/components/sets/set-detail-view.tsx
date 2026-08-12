@@ -9,16 +9,20 @@ import { SetFormDialog } from "@/components/sets/set-form-dialog";
 import { CardEditorDialog } from "@/components/cards/card-editor-dialog";
 import { ReorderableCardList } from "@/components/cards/reorderable-card-list";
 import { StudyModeLinks } from "@/components/study/study-mode-links";
+import { SetProgressSummary } from "@/components/stats/set-progress-summary";
+import { ModeBreakdownTable } from "@/components/stats/mode-breakdown-table";
 import { useSetDetailController } from "@/controllers/sets/use-set-detail-controller";
 import { useSetFormController } from "@/controllers/sets/use-set-form-controller";
 import { useCardListController } from "@/controllers/cards/use-card-list-controller";
 import { useCardFormController } from "@/controllers/cards/use-card-form-controller";
+import { useSetStatsController } from "@/controllers/sets/use-set-stats-controller";
 
 export function SetDetailView({ setId }: { setId: string }) {
   const detail = useSetDetailController(setId);
   const setForm = useSetFormController();
   const cardList = useCardListController(setId);
   const cardForm = useCardFormController(setId);
+  const setStats = useSetStatsController(setId);
 
   if (detail.isLoading || !detail.set) {
     return <div className="h-40 animate-pulse rounded-xl bg-muted" />;
@@ -69,6 +73,14 @@ export function SetDetailView({ setId }: { setId: string }) {
       </div>
 
       <StudyModeLinks setId={set.id} />
+
+      {setStats.stats && (
+        <div className="flex flex-col gap-4">
+          <h2 className="font-display text-lg text-foreground">Progress</h2>
+          <SetProgressSummary summary={setStats.stats.progress_summary} />
+          <ModeBreakdownTable modes={setStats.stats.by_mode} />
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">

@@ -8,6 +8,19 @@ export type SessionCreateResponse = components["schemas"]["SessionCreateResponse
 export type AnswerSubmit = components["schemas"]["AnswerSubmit"];
 export type AnswerResponse = components["schemas"]["AnswerResponse"];
 export type SessionEndResponse = components["schemas"]["SessionEndResponse"];
+export type SessionListResponse = components["schemas"]["SessionListResponse"];
+
+export interface ListSessionsParams {
+  set_id?: string;
+  mode?: StudyMode;
+  page?: number;
+  limit?: number;
+}
+
+export async function listSessions(params?: ListSessionsParams): Promise<SessionListResponse> {
+  const { data } = await apiClient.get<SessionListResponse>("/sessions", { params });
+  return data;
+}
 
 export async function createSession(body: SessionCreate): Promise<SessionCreateResponse> {
   const { data } = await apiClient.post<SessionCreateResponse>("/sessions", body);
