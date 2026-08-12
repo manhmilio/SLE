@@ -108,7 +108,6 @@ apps/web/
 ├── app/                                   # VIEW — routing only, thin pages
 │   ├── layout.tsx                         # fonts (Inter + Fraunces), ThemeProvider, QueryProvider, Toaster
 │   ├── page.tsx                           # Landing (poetic hero, "why Soulee", IELTS collection teaser)
-│   ├── middleware.ts                      # auth guard: redirect unauth → /login, auth-on-auth-pages → /dashboard
 │   ├── (auth)/
 │   │   ├── layout.tsx                     # AuthShell (centered card + brand illustration)
 │   │   ├── login/page.tsx
@@ -189,6 +188,8 @@ apps/web/
 
 **Naming rule:** `lib/api/*.api.ts` = one function per endpoint, typed with `@repo/types`. `lib/queries` / `lib/mutations` = one `useX` hook per endpoint, built on top of `*.api.ts`. `controllers/**/useXController.ts` = one hook per *screen/interaction*, composing one or more query/mutation hooks + validation + side effects. Pages only ever import from `controllers/` and `components/`.
 
+> **Correction made during FE-1 build:** the original draft of this plan had `app/middleware.ts` doing the protected-route redirect. That doesn't work here — as of the Phase 9.1 backend change, the refresh token is an **httpOnly cookie scoped to the API's own origin** (`apps/api/app/routers/auth.py`, `path=/api/v1/auth`, a different port than the Next.js app in dev). A same-origin Next.js middleware never receives that cookie, so it can't tell who's logged in. The real guard is client-side: `hooks/use-protected-route.ts` (`useProtectedRoute` / `useGuestRoute`) reads the Zustand auth store *after* it rehydrates (`hasHydrated`) and redirects from there — wired into `components/layout/app-shell.tsx` and `components/layout/auth-shell.tsx`, which the two `layout.tsx` files just delegate to.
+
 ---
 
 ## 4. State management split
@@ -221,7 +222,7 @@ Restructures the existing Phase 9.1–9.6 breakdown around the design-system-fir
 | Phase | Scope | Key deliverables |
 |---|---|---|
 | **FE-0 — Foundation** | Design system + brand | Sage-green tokens in `globals.css`, Fraunces font wired, `components/brand/Logo.tsx`, `AuthShell` + `AppShell` layouts, rename metadata/title to "Soulee", `next-themes` dark-mode toggle |
-| **FE-1 — Auth (~9.1)** | Finish what's scaffolded | `controllers/auth/*`, `lib/validations/auth.schema.ts`, `LoginForm`/`RegisterForm` views, `middleware.ts` route guard, toast feedback on success/error |
+| **FE-1 — Auth (~9.1)** | Finish what's scaffolded | `controllers/auth/*`, `lib/validations/auth.schema.ts`, `LoginForm`/`RegisterForm` views, client-side route guards (`hooks/use-protected-route.ts` via `AppShell`/`AuthShell`), toast feedback on success/error |
 | **FE-2 — Dashboard (~9.2)** | Home screen | `stats.api.ts` + `useStatsOverviewQuery`, `StreakBadge`, recent-sets grid, empty-state copy (poetic tone lives here) |
 | **FE-3 — Folders & Sets & Cards (~9.3)** | Full CRUD + reorder | Folder/Set CRUD (Model→Controller→View for each), tag-filter chips (IELTS collections), card drag-drop reorder (`@dnd-kit`), image upload for avatar/card |
 | **FE-4 — Study modes (~9.4)** | The core learning loop | `useStudySessionController` (mode-agnostic session lifecycle), 4 View components: `Flashcard`, `LearnQualityPicker` (1–5), `TestQuestion`, `MatchBoard` |
