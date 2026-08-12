@@ -15,7 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Đăng ký tài khoản mới
-         * @description Tạo tài khoản mới và trả về access + refresh token ngay lập tức.
+         * @description Tạo tài khoản mới và trả về access token; refresh token được set qua httpOnly cookie.
          *
          *     - **email**: định dạng email hợp lệ, unique
          *     - **password**: tối thiểu 8 ký tự, phải có chữ và số
@@ -40,7 +40,7 @@ export interface paths {
         /**
          * Đăng nhập
          * @description Đăng nhập bằng email + password.
-         *     Trả về access token (JWT) và refresh token (opaque).
+         *     Trả về access token (JWT); refresh token được set qua httpOnly cookie.
          */
         post: operations["login_api_v1_auth_login_post"];
         delete?: never;
@@ -1143,11 +1143,6 @@ export interface components {
             /** Ended At */
             ended_at: string | null;
         };
-        /** RefreshRequest */
-        RefreshRequest: {
-            /** Refresh Token */
-            refresh_token: string;
-        };
         /** RefreshResponse */
         RefreshResponse: {
             tokens: components["schemas"]["TokenData"];
@@ -1543,8 +1538,6 @@ export interface components {
         TokenData: {
             /** Access Token */
             access_token: string;
-            /** Refresh Token */
-            refresh_token: string;
             /**
              * Token Type
              * @default bearer
@@ -1733,11 +1726,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RefreshRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -1746,15 +1735,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuccessEnvelope_RefreshResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1766,11 +1746,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RefreshRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -1779,15 +1755,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuccessEnvelope_MessageData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

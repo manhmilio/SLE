@@ -46,9 +46,9 @@ class UserPublic(BaseModel):
 
 class TokenData(BaseModel):
     access_token: str
-    refresh_token: str
+    refresh_token: str = Field(exclude=True)   # ← đổi dòng này
     token_type: str = "bearer"
-    expires_in: int          # seconds until access token expires
+    expires_in: int
 
 
 class RegisterResponse(BaseModel):
