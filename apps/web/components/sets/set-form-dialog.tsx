@@ -1,6 +1,13 @@
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +37,9 @@ export function SetFormDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{dialogState.editing ? "Edit set" : "New study set"}</DialogTitle>
+          <DialogDescription>
+            {dialogState.editing ? "Update this set's details." : "Give your set a title, tags, and visibility."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           <div className="flex flex-col gap-1.5">

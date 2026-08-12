@@ -1,6 +1,13 @@
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -30,6 +37,9 @@ export function CardEditorDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{dialogState.editing ? "Edit card" : "New card"}</DialogTitle>
+          <DialogDescription>
+            {dialogState.editing ? "Update this card's front, back, or image." : "Add a front and back to this set."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           <div className="flex flex-col gap-1.5">

@@ -1,6 +1,13 @@
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +33,9 @@ export function FolderFormDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{dialogState.editing ? "Rename folder" : "New folder"}</DialogTitle>
+          <DialogDescription>
+            {dialogState.editing ? "Update this folder's name or description." : "Group your sets under a name."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           <div className="flex flex-col gap-1.5">

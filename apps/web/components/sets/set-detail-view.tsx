@@ -8,6 +8,7 @@ import { CloneButton } from "@/components/sets/clone-button";
 import { SetFormDialog } from "@/components/sets/set-form-dialog";
 import { CardEditorDialog } from "@/components/cards/card-editor-dialog";
 import { ReorderableCardList } from "@/components/cards/reorderable-card-list";
+import { StudyModeLinks } from "@/components/study/study-mode-links";
 import { useSetDetailController } from "@/controllers/sets/use-set-detail-controller";
 import { useSetFormController } from "@/controllers/sets/use-set-form-controller";
 import { useCardListController } from "@/controllers/cards/use-card-list-controller";
@@ -66,6 +67,8 @@ export function SetDetailView({ setId }: { setId: string }) {
           </Button>
         </div>
       </div>
+
+      <StudyModeLinks setId={set.id} />
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
