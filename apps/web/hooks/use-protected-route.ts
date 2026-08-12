@@ -36,3 +36,20 @@ export function useGuestRoute() {
     }
   }, [hasHydrated, isAuthenticated, router]);
 }
+
+/** Admin-only guard — bounce non-admins (or logged-out users) to the dashboard. */
+export function useAdminRoute() {
+  const router = useRouter();
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const role = useAuthStore((s) => s.user?.role);
+  const isAdmin = role === "admin";
+
+  useEffect(() => {
+    if (hasHydrated && (!isAuthenticated || !isAdmin)) {
+      router.replace("/dashboard");
+    }
+  }, [hasHydrated, isAuthenticated, isAdmin, router]);
+
+  return { isReady: hasHydrated && isAuthenticated && isAdmin };
+}
